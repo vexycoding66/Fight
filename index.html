@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Retro Neon Fury - 2D Fighter (Lag Free)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        
+        body {
+            font-family: 'Press Start 2P', monospace;
+            background-color: #0b0914;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            overflow: hidden;
+        }
+
+        /* CRT मॉनिटर प्रभाव */
+        .crt::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 10;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+        }
+
+        /* मोबाइल कंट्रोल्स के बटन */
+        .control-btn {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .control-btn:active {
+            transform: scale(0.92);
+            filter: brightness(1.2);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col items-center justify-center p-2 md:p-4 crt relative">
+
+    <!-- HUD (हेल्थ बार और टाइमर) -->
+    <div id="game-hud" class="hidden absolute top-4 left-0 right-0 z-20 px-4 max-w-4xl mx-auto w-full">
+        <div class="flex items-center justify-between gap-2 md:gap-4 bg-black/40 p-3 rounded-md border border-slate-800 backdrop-blur-xs">
+            <!-- खिलाड़ी 1 (P1 - आप) -->
+            <div class="flex-1">
+                <div class="flex justify-between items-end mb-1">
+                    <span class="text-cyan-400 text-[9px] md:text-xs font-bold">P1 (YOU)</span>
+                    <div class="flex gap-1" id="p1-rounds">
+                        <div class="w-3 h-3 border border-cyan-400 rounded-full"></div>
+                        <div class="w-3 h-3 border border-cyan-400 rounded-full"></div>
+                    </div>
+                </div>
+                <div class="w-full h-4 bg-slate-900 border border-cyan-500 rounded-sm overflow-hidden p-[2px]">
+                    <div id="p1-health" class="w-full h-full bg-cyan-400 transition-all duration-75"></div>
+                </div>
+            </div>
+
+            <!-- टाइमर और मोड -->
+            <div class="flex flex-col items-center px-2 min-w-[70px]">
+                <div id="timer" class="text-yellow-400 text-lg md:text-xl font-bold">99</div>
+                <div class="text-[7px] text-gray-500 mt-1" id="round-label">ROUND <span id="round-num">1</span></div>
+            </div>
+
+            <!-- विरोधी बोट (CPU/DUMMY) -->
+            <div class="flex-1 text-right">
+                <div class="flex justify-between items-end mb-1 flex-row-reverse">
+                    <span class="text-magenta-500 text-[9px] md:text-xs font-bold" id="p2-name">CPU</span>
+                    <div class="flex gap-1" id="p2-rounds">
+                        <div class="w-3 h-3 border border-rose-500 rounded-full"></div>
+                        <div class="w-3 h-3 border border-rose-500 rounded-full"></div>
+                    </div>
+                </div>
+                <div class="w-full h-4 bg-slate-900 border border-rose-500 rounded-sm overflow-hidden p-[2px]">
+                    <div id="p2-health" class="w-full h-full bg-rose-500 transition-all duration-75"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- मुख्य गेम कैनवास कंटेनर -->
+    <div id="canvas-container" class="relative w-full max-w-4xl aspect-[16/9] bg-black rounded-lg overflow-hidden border-2 border-slate-800 shadow-2xl flex items-center justify-center">
+        <canvas id="gameCanvas" class="w-full h-full object-cover"></canvas>
+
+        <!-- मुख्य स्क्रीन (Main Start Screen) -->
+        <div id="start-screen" class="absolute inset-0 bg-black/95 flex flex-col items-center justify-center text-center p-4 z-30">
+            <h1 class="text-2xl md:text-4xl lg:text-5xl font-extrabold text-cyan-400 mb-2 tracking-wider">
+                NEON FURY
+            </h1>
+            <p class="text-slate-400 text-[9px] md:text-xs mb-8 tracking-wide">RETRO CYBERPUNK 2D FIGHTER</p>
+
+            <!-- मुख्य मेनू विकल्प -->
+            <div id="main-menu" class="flex flex-col gap-3 w-64 max-w-full">
+                <button id="btn-vs-cpu" class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-3 px-4 rounded-md text-[10px] tracking-wider border-b-4 border-cyan-700 active:border-b-0 transition-all duration-75">
+                    VS COMPUTER
+                </button>
+                <button id="btn-practice" class="bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 px-4 rounded-md text-[10px] tracking-wider border-b-4 border-amber-700 active:border-b-0 transition-all duration-75">
+                    PRACTICE MODE
+                </button>
+            </div>
+
+            <!-- कठिनाई स्तर चयन मेनू -->
+            <div id="difficulty-menu" class="hidden flex flex-col gap-3 w-64 max-w-full">
+                <h3 class="text-yellow-400 text-[10px] mb-2 tracking-wide">SELECT DIFFICULTY</h3>
+                <button id="diff-easy" class="bg-green-500 hover:bg-green-400 text-black font-bold py-2.5 px-4 rounded-md text-[9px] tracking-wider border-b-4 border-green-700 active:border-b-0">
+                    EASY
+                </button>
+                <button id="diff-medium" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2.5 px-4 rounded-md text-[9px] tracking-wider border-b-4 border-yellow-700 active:border-b-0">
+                    MEDIUM
+                </button>
+                <button id="diff-hard" class="bg-rose-500 hover:bg-rose-400 text-black font-bold py-2.5 px-4 rounded-md text-[9px] tracking-wider border-b-4 border-rose-700 active:border-b-0">
+                    HARD
+                </button>
+                <button id="btn-back" class="text-slate-400 hover:text-white text-[8px] mt-2 underline">
+                    BACK TO MENU
+                </button>
+            </div>
+
+            <!-- कीबोर्ड गाइड -->
+            <div class="hidden md:block text-slate-500 text-[8px] mt-8 leading-relaxed max-w-md">
+                Movement: A/D to Move, W to Jump, S to Crouch<br>
+                Attacks: J (Punch), K (Kick), L (Block)
+            </div>
+        </div>
+
+        <!-- राउंड उद्घोषक (Announcer Overlay) -->
+        <div id="announcer-overlay" class="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none hidden z-20">
+            <h2 id="announcer-text" class="text-2xl md:text-4xl font-extrabold text-yellow-400 text-center scale-90 transition-transform duration-300">
+                ROUND 1
+            </h2>
+        </div>
+
+        <!-- परिणाम स्क्रीन -->
+        <div id="end-overlay" class="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-center p-4 z-30 hidden">
+            <h2 id="end-title" class="text-xl md:text-3xl text-rose-500 mb-2">P1 WINS!</h2>
+            <p class="text-gray-400 text-[9px] md:text-xs mb-6">THE NEON CITADEL HAS A CHAMPION</p>
+            <div class="flex gap-4">
+                <button id="btn-rematch" class="bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-2.5 px-6 rounded-md text-[9px] tracking-wider border-b-4 border-yellow-600 active:border-b-0">
+                    PLAY AGAIN
+                </button>
+                <button id="btn-home" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 px-6 rounded-md text-[9px] tracking-wider border-b-4 border-slate-900 active:border-b-0">
+                    MENU
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- साउंड सेटिंग्स -->
+    <div class="flex items-center gap-4 mt-2 justify-start w-full max-w-4xl px-2 text-[10px] text-slate-400">
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="sound-toggle" checked class="accent-cyan-500">
+            <span>SOUND FX</span>
+        </label>
+    </div>
+
+    <!-- मोबाइल कंट्रोल्स -->
+    <div id="mobile-controls" class="w-full max-w-4xl mt-3 flex justify-between gap-2 px-1 select-none z-20">
+        <!-- D-PAD (मूवमेंट) -->
+        <div class="flex items-center gap-1.5 bg-slate-900/40 p-2 rounded-xl border border-slate-800 backdrop-blur-xs">
+            <div class="grid grid-cols-3 gap-1.5 w-32 h-32">
+                <div></div>
+                <button id="ctrl-up" class="control-btn bg-slate-800 text-slate-300 flex items-center justify-center rounded-lg border-b-2 border-slate-950 font-black text-lg">▲</button>
+                <div></div>
+                
+                <button id="ctrl-left" class="control-btn bg-slate-800 text-slate-300 flex items-center justify-center rounded-lg border-b-2 border-slate-950 font-black text-lg">◀</button>
+                <div class="bg-slate-950/40 rounded-lg flex items-center justify-center text-slate-600 text-[8px]">PAD</div>
+                <button id="ctrl-right" class="control-btn bg-slate-800 text-slate-300 flex items-center justify-center rounded-lg border-b-2 border-slate-950 font-black text-lg">▶</button>
+
+                <div></div>
+                <button id="ctrl-down" class="control-btn bg-slate-800 text-slate-300 flex items-center justify-center rounded-lg border-b-2 border-slate-950 font-black text-lg">▼</button>
+                <div></div>
+            </div>
+        </div>
+
+        <!-- एक्शन बटन (पंच, किक, ब्लॉक) -->
+        <div class="flex items-center gap-1.5 bg-slate-900/40 p-2 rounded-xl border border-slate-800 backdrop-blur-xs">
+            <div class="flex flex-col gap-2">
+                <button id="ctrl-punch" class="control-btn w-20 h-10 bg-cyan-600 hover:bg-cyan-500 text-black font-extrabold text-[10px] rounded-lg border-b-4 border-cyan-800 flex items-center justify-center">
+                    PUNCH
+                </button>
+                <button id="ctrl-kick" class="control-btn w-20 h-10 bg-rose-600 hover:bg-rose-500 text-black font-extrabold text-[10px] rounded-lg border-b-4 border-rose-800 flex items-center justify-center">
+                    KICK
+                </button>
+            </div>
+            <div class="flex items-center justify-center">
+                <button id="ctrl-block" class="control-btn w-12 h-22 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-[9px] rounded-lg border-b-4 border-amber-700 flex flex-col items-center justify-center gap-1 py-1">
+                    <span>B</span>
+                    <span>L</span>
+                    <span>K</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- गेम स्क्रिप्ट -->
+    <script>
+        // साउंड जनरेटर (ऑप्टिमाइज़्ड)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const soundEnabled = document.getElementById('sound-toggle');
+
+        function playSynthSound(type) {
+            if (!soundEnabled.checked) return;
+            try {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'punch') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                    osc.start(now);
+                    osc.stop(now + 0.12);
+                } else if (type === 'kick') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(100, now);
+                    osc.frequency.exponentialRampToValueAtTime(20, now + 0.18);
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+                    osc.start(now);
+                    osc.stop(now + 0.18);
+                } else if (type === 'hit') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(350, now);
+                    osc.frequency.exponentialRampToValueAtTime(80, now + 0.15);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                } else if (type === 'block') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.setValueAtTime(600, now + 0.05);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } else if (type === 'jump') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(120, now);
+                    osc.frequency.exponentialRampToValueAtTime(450, now + 0.15);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                } else if (type === 'ko') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.linearRampToValueAtTime(55, now + 0.8);
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+                    osc.start(now);
+                    osc.stop(now + 0.8);
+                } else if (type === 'round') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(330, now);
+                    osc.frequency.setValueAtTime(440, now + 0.1);
+                    osc.frequency.setValueAtTime(554, now + 0.2);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                }
+            } catch (e) {
+                console.log("Audio play failed: ", e);
+            }
+        }
+
+        // कैनवास सेटअप
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GAME_WIDTH = 800;
+        const GAME_HEIGHT = 450;
+        canvas.width = GAME_WIDTH;
+        canvas.height = GAME_HEIGHT;
+
+        const GRAVITY = 0.85;
+        const GROUND_Y = 380;
+        
+        let gameMode = 'cpu'; 
+        let difficulty = 'medium'; 
+        let gameActive = false;
+        let isRoundActive = false;
+        let roundTimeLeft = 99;
+        let currentRound = 1;
+        let timerInterval = null;
+        let screenShake = 0;
+
+        let p1RoundsWon = 0;
+        let p2RoundsWon = 0;
+
+        const keys = {};
+
+        // लड़ाकू (Fighter) क्लास
+        class Fighter {
+            constructor({ x, y, color, isCpu = false, side = 1, name = "P1" }) {
+                this.x = x;
+                this.y = y;
+                this.width = 50;
+                this.height = 100;
+                this.color = color;
+                this.isCpu = isCpu;
+                this.side = side; 
+                this.name = name;
+
+                this.vx = 0;
+                this.vy = 0;
+                this.speed = 6;
+                this.jumpStrength = -16;
+                this.isGrounded = true;
+                
+                this.maxHealth = 100;
+                this.health = 100;
+                this.isCrouching = false;
+                this.isBlocking = false;
+                this.state = 'idle'; 
+                this.stateTimer = 0;
+
+                this.attackRange = 65;
+                this.isAttacking = false;
+                this.attackType = null;
+                this.hasHitOpponent = false;
+                this.staggerDuration = 0;
+
+                this.animFrame = 0;
+                this.animTicks = 0;
+            }
+
+            getHurtBox() {
+                const height = this.isCrouching ? 65 : this.height;
+                const y = this.isCrouching ? this.y + 35 : this.y;
+                return {
+                    x: this.x - this.width / 2,
+                    y: y,
+                    width: this.width,
+                    height: height
+                };
+            }
+
+            getAttackBox() {
+                if (!this.isAttacking) return null;
+                
+                const boxHeight = this.attackType === 'punch' ? 20 : 30;
+                const boxWidth = this.attackRange;
+                const boxY = this.isCrouching ? this.y + 40 : (this.attackType === 'punch' ? this.y + 25 : this.y + 60);
+                const boxX = this.side === 1 ? this.x : this.x - boxWidth;
+
+                return {
+                    x: boxX,
+                    y: boxY,
+                    width: boxWidth,
+                    height: boxHeight
+                };
+            }
+
+            update(opponent) {
+                if (this.staggerDuration > 0) {
+                    this.staggerDuration--;
+                    this.state = 'hit';
+                    if (this.staggerDuration <= 0) {
+                        this.state = 'idle';
+                    }
+                }
+
+                if (this.health <= 0 && gameMode !== 'practice') {
+                    this.state = 'ko';
+                    this.vx = 0;
+                }
+
+                if (this.state !== 'hit' && this.state !== 'ko') {
+                    this.x += this.vx;
+                    this.y += this.vy;
+
+                    if (this.y < GROUND_Y - this.height) {
+                        this.vy += GRAVITY;
+                        this.isGrounded = false;
+                        this.state = 'jump';
+                    } else {
+                        this.y = GROUND_Y - this.height;
+                        this.vy = 0;
+                        this.isGrounded = true;
+                        if (this.state === 'jump') this.state = 'idle';
+                    }
+
+                    const halfW = this.width / 2;
+                    if (this.x - halfW < 0) this.x = halfW;
+                    if (this.x + halfW > GAME_WIDTH) this.x = GAME_WIDTH - halfW;
+
+                    this.side = this.x < opponent.x ? 1 : -1;
+
+                    if (this.isAttacking) {
+                        this.stateTimer--;
+                        if (this.stateTimer <= 0) {
+                            this.isAttacking = false;
+                            this.attackType = null;
+                            this.state = 'idle';
+                        }
+                    }
+
+                    if (this.isGrounded && !this.isAttacking && !this.isCrouching) {
+                        this.state = Math.abs(this.vx) > 0.5 ? 'walk' : 'idle';
+                    }
+                }
+
+                this.animTicks++;
+                if (this.animTicks % 8 === 0) {
+                    this.animFrame = (this.animFrame + 1) % 4;
+                }
+            }
+
+            jump() {
+                if (this.isGrounded && this.state !== 'hit' && this.state !== 'ko') {
+                    this.vy = this.jumpStrength;
+                    this.isGrounded = false;
+                    this.state = 'jump';
+                    playSynthSound('jump');
+                }
+            }
+
+            crouch(isCrouching) {
+                if (this.isGrounded && this.state !== 'hit' && this.state !== 'ko' && !this.isAttacking) {
+                    this.isCrouching = isCrouching;
+                    this.state = isCrouching ? 'crouch' : 'idle';
+                    if (isCrouching) {
+                        this.vx = 0;
+                    }
+                }
+            }
+
+            performAttack(type) {
+                if (this.state !== 'hit' && this.state !== 'ko' && !this.isAttacking && !this.isBlocking) {
+                    this.isAttacking = true;
+                    this.attackType = type;
+                    this.hasHitOpponent = false;
+                    this.state = type;
+                    this.stateTimer = type === 'punch' ? 12 : 18;
+                    playSynthSound(type);
+                }
+            }
+
+            takeDamage(amount, knockback, direction) {
+                if (this.state === 'ko') return;
+
+                if (gameMode === 'practice' && this.name === "CPU") {
+                    this.staggerDuration = 15;
+                    this.isAttacking = false;
+                    this.isCrouching = false;
+                    this.state = 'hit';
+                    this.vx = direction * (knockback * 0.8);
+                    playSynthSound('hit');
+                    screenShake = 8;
+                    createHitSpark(this.x, this.y + 25, this.color);
+                    return;
+                }
+
+                if (this.isBlocking && ((direction > 0 && this.side === -1) || (direction < 0 && this.side === 1))) {
+                    this.health -= Math.floor(amount * 0.15); 
+                    this.vx = direction * (knockback * 0.3);
+                    playSynthSound('block');
+                    createHitSpark(this.x, this.y + 20, '#ffea00');
+                } else {
+                    this.health -= amount;
+                    this.staggerDuration = 20;
+                    this.isAttacking = false;
+                    this.isCrouching = false;
+                    this.state = 'hit';
+                    this.vx = direction * knockback;
+                    this.vy = -3;
+                    playSynthSound('hit');
+                    screenShake = 12;
+                    createHitSpark(this.x, this.y + 25, this.color);
+                }
+
+                if (this.health < 0) this.health = 0;
+            }
+
+            draw(ctx) {
+                ctx.save();
+
+                // ज़मीन की परछाईं
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                ctx.beginPath();
+                ctx.ellipse(this.x, GROUND_Y - 2, 35, 8, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                const isP1 = this.name === "P1";
+                const outlineColor = this.color;
+                const innerColor = isP1 ? '#1a1d24' : '#1d1a24';
+
+                if (this.state === 'ko') {
+                    ctx.translate(this.x, GROUND_Y - 15);
+                    ctx.rotate(this.side * Math.PI / 2);
+                    ctx.fillStyle = outlineColor;
+                    ctx.fillRect(-50, -15, 100, 30);
+                    ctx.fillStyle = '#ff0000';
+                    ctx.fillRect(30, -5, 10, 10);
+                    ctx.restore();
+                    return;
+                }
+
+                if (this.state === 'hit') {
+                    ctx.translate(this.x, this.y);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(-this.width / 2, 0, this.width, this.height);
+                    ctx.strokeStyle = outlineColor;
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(-this.width / 2, 0, this.width, this.height);
+                    ctx.restore();
+                    return;
+                }
+
+                let heightOffset = 0;
+                let legY = 65;
+                let bodyH = 45;
+
+                if (this.isCrouching) {
+                    heightOffset = 30;
+                    legY = 35;
+                    bodyH = 30;
+                }
+
+                ctx.translate(this.x, this.y + heightOffset);
+                ctx.scale(this.side, 1);
+
+                // --- पैर (LEGS DRAWING) ---
+                ctx.fillStyle = outlineColor;
+                if (this.state === 'walk') {
+                    const offset = Math.sin(this.animTicks * 0.25) * 12;
+                    ctx.fillRect(-18, legY, 12, 35 - heightOffset/2);
+                    ctx.fillRect(6, legY, 12, 35 - heightOffset/2);
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(-18 + offset/3, legY + 25, 10, 10);
+                    ctx.fillRect(6 - offset/3, legY + 25, 10, 10);
+                } else if (this.state === 'jump') {
+                    ctx.fillRect(-15, legY, 10, 20);
+                    ctx.fillRect(5, legY, 10, 20);
+                } else if (this.isAttacking && this.attackType === 'kick') {
+                    ctx.fillRect(-15, legY, 11, 35);
+                } else {
+                    ctx.fillRect(-15, legY, 11, 35);
+                    ctx.fillRect(4, legY, 11, 35);
+                }
+
+                // शरीर
+                ctx.fillStyle = innerColor;
+                ctx.strokeStyle = outlineColor;
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.roundRect(-22, 20, 44, bodyH, 6);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = outlineColor;
+                ctx.fillRect(-22, bodyH + 10, 44, 6);
+
+                // हेलमेट
+                ctx.fillStyle = outlineColor;
+                ctx.beginPath();
+                ctx.roundRect(-16, -10, 32, 30, 4);
+                ctx.fill();
+
+                // वाइज़र
+                ctx.fillStyle = isP1 ? '#00f0ff' : '#ff007f';
+                ctx.fillRect(2, -4, 14, 8);
+
+                ctx.fillStyle = outlineColor;
+                const wave = Math.sin(this.animTicks * 0.15) * 4;
+                ctx.fillRect(-24, -4 + wave, 10, 6);
+
+                // हाथ और हमला
+                ctx.fillStyle = outlineColor;
+                if (this.isBlocking) {
+                    ctx.fillRect(10, 15, 12, 35);
+                    ctx.fillStyle = 'rgba(255, 234, 0, 0.2)';
+                    ctx.strokeStyle = '#ffea00';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(22, 32, 25, -Math.PI/2, Math.PI/2);
+                    ctx.stroke();
+                } else if (this.isAttacking && this.attackType === 'punch') {
+                    ctx.fillRect(15, 22, 40, 12);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(50, 20, 10, 16);
+                } else if (this.isAttacking && this.attackType === 'kick') {
+                    ctx.fillRect(12, legY - 10, 45, 15);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(52, legY - 12, 12, 19);
+                } else {
+                    const armWave = Math.sin(this.animTicks * 0.1) * 3;
+                    ctx.fillRect(-22, 22 + armWave, 8, 30);
+                    ctx.fillRect(14, 22 - armWave, 8, 30);
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // स्पार्क्स पार्टिकल सिस्टम
+        const particles = [];
+        function createHitSpark(x, y, color) {
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: (Math.random() - 0.6) * 10 - 3,
+                    size: Math.random() * 4 + 2,
+                    color: color,
+                    life: 1.0,
+                    decay: Math.random() * 0.06 + 0.04
+                });
+            }
+        }
+
+        function updateAndDrawParticles(ctx) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.3;
+                p.life -= p.decay;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+                ctx.restore();
+            }
+        }
+
+        // प्लेयर और गेम वेरिएबल सेटअप
+        let p1 = new Fighter({ x: 200, y: GROUND_Y - 100, color: '#00f0ff', name: "P1" });
+        let p2 = new Fighter({ x: 600, y: GROUND_Y - 100, color: '#ff007f', isCpu: true, name: "CPU" });
+
+        const activeControls = {
+            left: false,
+            right: false,
+            up: false,
+            down: false,
+            punch: false,
+            kick: false,
+            block: false
+        };
+
+        // कीबोर्ड हैंडलिंग
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'KeyW') activeControls.up = true;
+            if (e.code === 'KeyS') activeControls.down = true;
+            if (e.code === 'KeyA') activeControls.left = true;
+            if (e.code === 'KeyD') activeControls.right = true;
+            if (e.code === 'KeyJ') activeControls.punch = true;
+            if (e.code === 'KeyK') activeControls.kick = true;
+            if (e.code === 'KeyL') activeControls.block = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+            if (e.code === 'KeyW') activeControls.up = false;
+            if (e.code === 'KeyS') activeControls.down = false;
+            if (e.code === 'KeyA') activeControls.left = false;
+            if (e.code === 'KeyD') activeControls.right = false;
+            if (e.code === 'KeyJ') activeControls.punch = false;
+            if (e.code === 'KeyK') activeControls.kick = false;
+            if (e.code === 'KeyL') activeControls.block = false;
+        });
+
+        // मोबाइल बटन टच हैंडलिंग
+        function setupTouchBtn(btnId, controlKey) {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+
+            const triggerStart = (e) => {
+                e.preventDefault();
+                activeControls[controlKey] = true;
+            };
+
+            const triggerEnd = (e) => {
+                e.preventDefault();
+                activeControls[controlKey] = false;
+            };
+
+            btn.addEventListener('touchstart', triggerStart);
+            btn.addEventListener('touchend', triggerEnd);
+            btn.addEventListener('mousedown', triggerStart);
+            btn.addEventListener('mouseup', triggerEnd);
+            btn.addEventListener('mouseleave', triggerEnd);
+        }
+
+        setupTouchBtn('ctrl-left', 'left');
+        setupTouchBtn('ctrl-right', 'right');
+        setupTouchBtn('ctrl-up', 'up');
+        setupTouchBtn('ctrl-down', 'down');
+        setupTouchBtn('ctrl-punch', 'punch');
+        setupTouchBtn('ctrl-kick', 'kick');
+        setupTouchBtn('ctrl-block', 'block');
+
+        // एआई कठिनाई और बुद्धिमत्ता नियंत्रण
+        let cpuAITick = 0;
+        function handleCPUAI() {
+            if (gameMode === 'practice') {
+                p2.vx = 0;
+                p2.isBlocking = false;
+                p2.crouch(false);
+                return;
+            }
+
+            if (!p2.isCpu || p2.state === 'ko' || p2.state === 'hit') return;
+
+            cpuAITick++;
+            const distance = Math.abs(p2.x - p1.x);
+
+            let actionDelay = 25; 
+            if (difficulty === 'easy') actionDelay = 40;
+            if (difficulty === 'hard') actionDelay = 10;
+
+            if (cpuAITick % actionDelay === 0) {
+                if (difficulty === 'easy') {
+                    if (distance > 130) {
+                        p2.vx = p1.x < p2.x ? -p2.speed * 0.4 : p2.speed * 0.4;
+                    } else {
+                        p2.vx = 0;
+                        if (Math.random() < 0.25) {
+                            p2.performAttack('punch');
+                        }
+                    }
+                    p2.isBlocking = false;
+                } 
+                else if (difficulty === 'medium') {
+                    if (distance > 100) {
+                        p2.vx = p1.x < p2.x ? -p2.speed * 0.7 : p2.speed * 0.7;
+                        p2.isBlocking = false;
+                    } else {
+                        const rnd = Math.random();
+                        if (rnd < 0.4) {
+                            p2.performAttack(Math.random() > 0.5 ? 'punch' : 'kick');
+                        } else if (rnd < 0.6) {
+                            p2.isBlocking = true;
+                            p2.vx = 0;
+                        } else {
+                            p2.vx = p1.x < p2.x ? p2.speed * 0.5 : -p2.speed * 0.5;
+                        }
+                    }
+                } 
+                else if (difficulty === 'hard') {
+                    if (distance > 70) {
+                        p2.vx = p1.x < p2.x ? -p2.speed * 1.0 : p2.speed * 1.0;
+                        p2.isBlocking = false;
+                        if (Math.random() < 0.2 && p2.isGrounded) {
+                            p2.jump();
+                        }
+                    } else {
+                        p2.vx = 0;
+                        const rnd = Math.random();
+                        
+                        if (p1.isAttacking) {
+                            if (Math.random() < 0.8) {
+                                p2.isBlocking = true;
+                            } else {
+                                p2.performAttack('kick');
+                            }
+                        } else {
+                            p2.isBlocking = false;
+                            if (rnd < 0.6) {
+                                p2.performAttack(Math.random() > 0.4 ? 'kick' : 'punch');
+                            } else if (rnd < 0.8) {
+                                p2.crouch(true);
+                            } else {
+                                p2.vx = p1.x < p2.x ? p2.speed * 0.8 : -p2.speed * 0.8;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // डैमेज और टक्कर गणना
+        function checkCollisions() {
+            if (!isRoundActive) return;
+
+            let p2DamageMultiplier = 1.0;
+            if (difficulty === 'easy') p2DamageMultiplier = 0.5;
+            if (difficulty === 'hard') p2DamageMultiplier = 1.8;
+
+            if (p1.isAttacking && !p1.hasHitOpponent) {
+                const attackBox = p1.getAttackBox();
+                const targetBox = p2.getHurtBox();
+
+                if (attackBox && intersects(attackBox, targetBox)) {
+                    p1.hasHitOpponent = true;
+                    const dmg = p1.attackType === 'punch' ? 10 : 15;
+                    const knock = p1.attackType === 'punch' ? 8 : 12;
+                    p2.takeDamage(dmg, knock, p1.side);
+                    updateHUD();
+                }
+            }
+
+            if (p2.isAttacking && !p2.hasHitOpponent) {
+                const attackBox = p2.getAttackBox();
+                const targetBox = p1.getHurtBox();
+
+                if (attackBox && intersects(attackBox, targetBox)) {
+                    p2.hasHitOpponent = true;
+                    
+                    let baseDmg = p2.attackType === 'punch' ? 10 : 15;
+                    let finalDmg = Math.floor(baseDmg * p2DamageMultiplier);
+                    const knock = p2.attackType === 'punch' ? 8 : 12;
+                    
+                    p1.takeDamage(finalDmg, knock, p2.side);
+                    updateHUD();
+                }
+            }
+        }
+
+        function intersects(a, b) {
+            return a.x < b.x + b.width &&
+                   a.x + a.width > b.x &&
+                   a.y < b.y + b.height &&
+                   a.y + a.height > b.y;
+        }
+
+        function updateHUD() {
+            document.getElementById('p1-health').style.width = `${p1.health}%`;
+            if (gameMode === 'practice') {
+                document.getElementById('p2-health').style.width = '100%';
+            } else {
+                document.getElementById('p2-health').style.width = `${p2.health}%`;
+            }
+        }
+
+        // बैकग्राउंड ग्राफ़िक्स
+        function drawBackground(ctx) {
+            ctx.fillStyle = '#0f0e1a';
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            for (let i = 0; i < 40; i++) {
+                const starX = (Math.sin(i * 12345) + 1) * 0.5 * GAME_WIDTH;
+                const starY = (Math.cos(i * 67890) + 1) * 0.5 * 250;
+                ctx.fillRect(starX, starY, 2, 2);
+            }
+
+            ctx.fillStyle = '#17162b';
+            for (let i = 0; i < 15; i++) {
+                const w = 60 + (i % 3) * 20;
+                const h = 120 + (i % 4) * 35;
+                const x = i * 65 - 20;
+                const y = GROUND_Y - h;
+                ctx.fillRect(x, y, w, h);
+                ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
+                ctx.fillRect(x + w/4, y + 20, w/2, h - 40);
+                ctx.fillStyle = '#17162b';
+            }
+
+            ctx.fillStyle = '#110f1f';
+            ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
+
+            ctx.strokeStyle = '#2b194d';
+            ctx.lineWidth = 2;
+            for (let y = GROUND_Y; y < GAME_HEIGHT; y += 15) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(GAME_WIDTH, y);
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = '#00f0ff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, GROUND_Y);
+            ctx.lineTo(GAME_WIDTH, GROUND_Y);
+            ctx.stroke();
+        }
+
+        // उद्घोषणा प्रभाव
+        function triggerAnnouncer(text, callback) {
+            const overlay = document.getElementById('announcer-overlay');
+            const element = document.getElementById('announcer-text');
+            element.textContent = text;
+            overlay.classList.remove('hidden');
+            element.style.transform = "scale(1.2)";
+            
+            playSynthSound('round');
+
+            setTimeout(() => {
+                element.style.transform = "scale(1)";
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                    if (callback) callback();
+                }, 800);
+            }, 600);
+        }
+
+        function startRound() {
+            p1.health = 100;
+            p2.health = 100;
+            p1.x = 220;
+            p2.x = 580;
+            p1.vy = p1.vx = 0;
+            p2.vy = p2.vx = 0;
+            p1.state = 'idle';
+            p2.state = 'idle';
+            p1.isCrouching = false;
+            p1.isBlocking = false;
+            p1.isAttacking = false;
+            p2.isCrouching = false;
+            p2.isBlocking = false;
+            p2.isAttacking = false;
+            
+            updateHUD();
+
+            if (gameMode === 'practice') {
+                roundTimeLeft = '∞';
+                document.getElementById('timer').textContent = '∞';
+                document.getElementById('round-label').innerHTML = 'PRACTICE';
+                isRoundActive = true; 
+                return;
+            }
+
+            roundTimeLeft = 99;
+            document.getElementById('timer').textContent = roundTimeLeft;
+            document.getElementById('round-label').innerHTML = `ROUND <span id="round-num">${currentRound}</span>`;
+            
+            isRoundActive = false;
+            
+            triggerAnnouncer(`ROUND ${currentRound}`, () => {
+                triggerAnnouncer("FIGHT!", () => {
+                    isRoundActive = true;
+                    startTimer();
+                });
+            });
+        }
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (isRoundActive && gameActive && gameMode !== 'practice') {
+                    roundTimeLeft--;
+                    document.getElementById('timer').textContent = roundTimeLeft;
+                    
+                    if (roundTimeLeft <= 0) {
+                        endRound(true);
+                    }
+                }
+            }, 1000);
+        }
+
+        function endRound(timeout = false) {
+            isRoundActive = false;
+            clearInterval(timerInterval);
+
+            let winner = null;
+            if (timeout) {
+                if (p1.health > p2.health) winner = p1;
+                else if (p2.health > p1.health) winner = p2;
+            } else {
+                if (p1.health <= 0) winner = p2;
+                else if (p2.health <= 0) winner = p1;
+            }
+
+            if (winner) {
+                playSynthSound('ko');
+                if (winner === p1) {
+                    p1RoundsWon++;
+                    updateRoundTally();
+                    triggerAnnouncer("P1 WINS ROUND!", checkMatchEnd);
+                } else {
+                    p2RoundsWon++;
+                    updateRoundTally();
+                    triggerAnnouncer("CPU WINS ROUND!", checkMatchEnd);
+                }
+            } else {
+                triggerAnnouncer("DRAW!", checkMatchEnd);
+            }
+        }
+
+        function updateRoundTally() {
+            const p1Dots = document.getElementById('p1-rounds').children;
+            const p2Dots = document.getElementById('p2-rounds').children;
+
+            if (gameMode === 'practice') {
+                for (let i = 0; i < 2; i++) {
+                    p1Dots[i].style.backgroundColor = 'transparent';
+                    p2Dots[i].style.backgroundColor = 'transparent';
+                }
+                return;
+            }
+
+            for (let i = 0; i < 2; i++) {
+                if (i < p1RoundsWon) {
+                    p1Dots[i].style.backgroundColor = '#00f0ff';
+                } else {
+                    p1Dots[i].style.backgroundColor = 'transparent';
+                }
+                
+                if (i < p2RoundsWon) {
+                    p2Dots[i].style.backgroundColor = '#ff007f';
+                } else {
+                    p2Dots[i].style.backgroundColor = 'transparent';
+                }
+            }
+        }
+
+        function checkMatchEnd() {
+            if (p1RoundsWon >= 2) {
+                showMatchWinner("P1 WINS THE MATCH!");
+            } else if (p2RoundsWon >= 2) {
+                showMatchWinner("CPU WINS THE MATCH!");
+            } else {
+                currentRound++;
+                startRound();
+            }
+        }
+
+        function showMatchWinner(winnerText) {
+            gameActive = false;
+            const endOverlay = document.getElementById('end-overlay');
+            const endTitle = document.getElementById('end-title');
+            endTitle.textContent = winnerText;
+            endOverlay.classList.remove('hidden');
+        }
+
+        // मुख्य गेम लूप
+        function loop() {
+            let dx = 0;
+            let dy = 0;
+            if (screenShake > 0) {
+                dx = (Math.random() - 0.5) * screenShake;
+                dy = (Math.random() - 0.5) * screenShake;
+                screenShake *= 0.9;
+                if (screenShake < 0.5) screenShake = 0;
+            }
+
+            ctx.save();
+            ctx.translate(dx, dy);
+
+            drawBackground(ctx);
+
+            if (gameActive) {
+                if (isRoundActive) {
+                    if (activeControls.left) {
+                        p1.vx = -p1.speed;
+                    } else if (activeControls.right) {
+                        p1.vx = p1.speed;
+                    } else {
+                        p1.vx = 0;
+                    }
+
+                    if (activeControls.up) p1.jump();
+                    p1.crouch(activeControls.down);
+                    p1.isBlocking = activeControls.block && p1.isGrounded;
+
+                    if (activeControls.punch) p1.performAttack('punch');
+                    if (activeControls.kick) p1.performAttack('kick');
+
+                    handleCPUAI();
+                } else {
+                    p1.vx *= 0.8;
+                    p2.vx *= 0.8;
+                }
+
+                p1.update(p2);
+                p2.update(p1);
+
+                if (isRoundActive && gameMode !== 'practice' && (p1.health <= 0 || p2.health <= 0)) {
+                    endRound();
+                }
+
+                checkCollisions();
+            }
+
+            p1.draw(ctx);
+            p2.draw(ctx);
+
+            updateAndDrawParticles(ctx);
+
+            ctx.restore();
+
+            requestAnimationFrame(loop);
+        }
+
+        const mainMenu = document.getElementById('main-menu');
+        const difficultyMenu = document.getElementById('difficulty-menu');
+
+        document.getElementById('btn-vs-cpu').addEventListener('click', () => {
+            mainMenu.classList.add('hidden');
+            difficultyMenu.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-back').addEventListener('click', () => {
+            difficultyMenu.classList.add('hidden');
+            mainMenu.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-practice').addEventListener('click', () => {
+            setupGame('practice', 'easy');
+        });
+
+        document.getElementById('diff-easy').addEventListener('click', () => {
+            setupGame('cpu', 'easy');
+        });
+
+        document.getElementById('diff-medium').addEventListener('click', () => {
+            setupGame('cpu', 'medium');
+        });
+
+        document.getElementById('diff-hard').addEventListener('click', () => {
+            setupGame('cpu', 'hard');
+        });
+
+        document.getElementById('btn-rematch').addEventListener('click', () => {
+            document.getElementById('end-overlay').classList.add('hidden');
+            resetMatch();
+        });
+
+        document.getElementById('btn-home').addEventListener('click', () => {
+            document.getElementById('end-overlay').classList.add('hidden');
+            document.getElementById('game-hud').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+            mainMenu.classList.remove('hidden');
+            difficultyMenu.classList.add('hidden');
+            gameActive = false;
+        });
+
+        function setupGame(mode, diff) {
+            gameMode = mode;
+            difficulty = diff;
+            
+            p2.isCpu = true;
+            p2.name = (mode === 'practice') ? "BOT (DUMMY)" : `CPU (${diff.toUpperCase()})`;
+            document.getElementById('p2-name').textContent = p2.name;
+
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-hud').classList.remove('hidden');
+            
+            resetMatch();
+        }
+
+        function resetMatch() {
+            p1RoundsWon = 0;
+            p2RoundsWon = 0;
+            currentRound = 1;
+            gameActive = true;
+            updateRoundTally();
+            startRound();
+        }
+
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
+```eof
